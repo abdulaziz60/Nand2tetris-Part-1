@@ -1,0 +1,88 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/5/CPU.hdl
+/**
+ * The Hack Central Processing unit (CPU).
+ * Parses the binary code in the instruction input and executes it according to the
+ * Hack machine language specification. In the case of a C-instruction, computes the
+ * function specified by the instruction. If the instruction specifies to read a memory
+ * value, the inM input is expected to contain this value. If the instruction specifies
+ * to write a value to the memory, sets the outM output to this value, sets the addressM
+ * output to the target address, and asserts the writeM output (when writeM = 0, any
+ * value may appear in outM).
+ * If the reset input is 0, computes the address of the next instruction and sets the
+ * pc output to that value. If the reset input is 1, sets pc to 0.
+ * Note: The outM and writeM outputs are combinational: they are affected by the
+ * instruction's execution during the current cycle. The addressM and pc outputs are
+ * clocked: although they are affected by the instruction's execution, they commit to
+ * their new values only in the next cycle.
+ */
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+	//// Replace this comment with your code.
+
+    //set A Register and addressM output 
+    Mux16(a=instruction , b=ALUOutput , sel=instruction[15] , out=ARegInput,);
+    //if the instruction is A. Load the A Register
+    Not(in=instruction[15] , out=AInstLoadA );
+
+    //if the instruction is C and and Dest has A, Load the A Register
+    And(a=instruction[15] , b=instruction[5] , out=CInstLoadA );
+    Or(a= CInstLoadA, b=AInstLoadA , out=LoadA );
+
+    //load the A Register
+    ARegister(in=ARegInput , load=LoadA , out=ARegOutput, out[0..14]=addressM);
+    
+    //get the first ALU input. which is either A register or inM
+    Mux16(a=ARegOutput , b=inM , sel=instruction[12] , out=ALUSecondInput );
+    
+    //load the D register if required
+    And(a=instruction[15] , b=instruction[4] , out=LoadD );
+    //NOTE: change in to ALUOutput
+    DRegister(in=ALUOutput , load=LoadD , out=ALUFirstInputD );
+
+    ALU(x=ALUFirstInputD , y=ALUSecondInput , zx=instruction[11] ,
+        nx=instruction[10] , zy=instruction[9] ,
+        ny=instruction[8] , f=instruction[7] , no=instruction[6] , out=ALUOutput , 
+    zr=ALUOutIsZero , ng=ALUOutIsNg , out=outM);
+
+    //Write to M
+    And(a=instruction[15] , b=instruction[3] , out=writeM );
+    
+    //PC load
+    //Not(in=ALUOutIsNg , out=ALUOutIsntNg );
+    //And(a=instruction[0] , b=ALUOutIsntNg , out=j3load );
+    Or(a=ALUOutIsNg , b=ALUOutIsZero , out=Prej3 );
+    Not(in=Prej3 , out=j3 );
+    And(a= instruction[0], b=j3 , out=j3load );
+
+    And(a=instruction[1] , b=ALUOutIsZero , out=j2load );
+
+    And(a=instruction[2] , b=ALUOutIsNg , out=j1load ); 
+
+    Or(a=j3load , b=j2load , out=j23load );
+    Or(a=j23load , b=j1load , out=j123load );
+
+    And(a=j123load , b=instruction[15] , out=PCLoad );
+
+    //PC
+    PC(in=ARegOutput , load=PCLoad , inc=true , reset=reset , out=PCoutput, out[0..14]=pc );
+
+
+
+
+}
